@@ -37,6 +37,42 @@ const MovieDetails = () => {
   const [recomended, setRecomended] = useState([]);
   const [isRecomendedLoading, setIsRecomendedLoading] = useState(true);
 
+  const CONTINUE_WATCHING_KEY = "continue_watching_list";
+
+  const addOrUpdateContinueWatching = async (item) => {
+    try {
+      const jsonValue = await AsyncStorage.getItem(CONTINUE_WATCHING_KEY);
+      let list = jsonValue != null ? JSON.parse(jsonValue) : [];
+
+      // Check if item already exists by id + (season + episode if tv)
+      const existingIndex = list.findIndex((entry) => {
+        if (entry.id !== item.id) return false;
+        if (entry.media_type === "tv") {
+          return entry.season === item.season && entry.episode === item.episode;
+        }
+        return true;
+      });
+
+      if (existingIndex !== -1) {
+        // Update the existing entry with new timestamp or data
+        list[existingIndex] = { ...item, lastWatchedAt: Date.now() };
+      } else {
+        // Add new entry
+        list.push({ ...item, lastWatchedAt: Date.now() });
+      }
+
+      // Optionally: sort by lastWatchedAt descending (most recent first)
+      list.sort((a, b) => b.lastWatchedAt - a.lastWatchedAt);
+
+      await AsyncStorage.setItem(CONTINUE_WATCHING_KEY, JSON.stringify(list));
+      console.log("ran");
+    } catch (e) {
+      console.error("Error updating continue watching list", e);
+    } finally {
+      console.log("rannnn");
+    }
+  };
+
   const fetchTrailer = async () => {
     try {
       const res = await axios.get(
@@ -154,15 +190,25 @@ const MovieDetails = () => {
         <View className="w-[90%] self-center">
           <View className="flex-row gap-5">
             <TouchableOpacity
-              onPress={() =>
+              onPress={async () => {
                 router.push({
                   pathname: `Movie/${MovieDetails}`,
                   params: {
                     // uri: `https://multiembed.mov/?video_id=${MovieDetails}&tmdb=1`,
                     uri: `https://vidsrc.cc/v2/embed/movie/${MovieDetails}?autoPlay=true`,
                   },
-                })
-              }
+                });
+                await addOrUpdateContinueWatching({
+                  id: MovieDetails,
+                  media_type: "movie",
+                  title: name,
+                  poster_path: image,
+                  bk_img: bk_img,
+                  date: date,
+                  rating: 0, // or your rating if you have it
+                  details: details,
+                });
+              }}
               activeOpacity={0.6}
               className="flex-1 h-[50px] bg-rose-600 justify-center flex-row items-center rounded-[10px] gap-2"
             >

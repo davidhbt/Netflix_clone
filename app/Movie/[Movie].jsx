@@ -1,49 +1,75 @@
-import { useEffect, useRef, useState } from "react";
-import { StatusBar, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, Platform, Linking, StatusBar, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { useLocalSearchParams } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const ALERT_KEY = "hideFullscreenAlert";
 
 const Movie = () => {
   const { uri } = useLocalSearchParams();
   const videoUrl = uri;
 
   const webViewRef = useRef(null);
-  const [blockingEnabled, setBlockingEnabled] = useState(true);
   const [redirectAttempts, setRedirectAttempts] = useState(0);
-
   const MAX_REDIRECT_ATTEMPTS = 3;
 
+  const lockAttempts = useRef(0);
+  const lock = useRef(false);
+
   useEffect(() => {
-    const tryLockOrientation = async () => {
+    (async () => {
       try {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE
-        );
-
-        // Confirm if orientation actually changed
-        const orientation = await ScreenOrientation.getOrientationAsync();
-
-        const isLandscape =
-          orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-          orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT;
-
-        if (!isLandscape) {
-          console.warn("Orientation lock may be blocked by system settings.");
-          // Optionally show a fallback UI or rotate the component manually
-          // setFallbackRotation(true);
+        // Lock once to landscape
+        lockAttempts.current += 1;
+        if (lockAttempts.current === 1) {
+          await ScreenOrientation.lockAsync(
+            ScreenOrientation.OrientationLock.LANDSCAPE
+          );
+          console.log("Locked to landscape (first mount)");
+        } else {
+          await ScreenOrientation.unlockAsync();
+          console.log("Unlocked (re-render detected)");
         }
-      } catch (err) {
-        console.warn("Failed to lock orientation:", err);
+      } catch (e) {
+        console.warn("Orientation error:", e);
       }
-    };
 
-    tryLockOrientation();
+      // Check AsyncStorage to decide whether to show the alert
+      const hideAlert = await AsyncStorage.getItem(ALERT_KEY);
+      if (!hideAlert) {
+        Alert.alert(
+          "Important",
+          "Please don't click the full screen button in the video player, as it causes a crash.",
+          [
+            {
+              text: "Got it",
+              onPress: () => console.log("Alert closed"),
+            },
+            {
+              text: "Don't show again",
+              onPress: async () => {
+                try {
+                  await AsyncStorage.setItem(ALERT_KEY, "true");
+                  console.log("Alert preference saved");
+                } catch (e) {
+                  console.warn("Failed to save alert preference:", e);
+                }
+              },
+            },
+          ],
+          {
+            cancelable: false,
+          }
+        );
+      }
+    })();
 
     return () => {
-      ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.PORTRAIT_UP
-      ).catch(console.warn);
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+        .then(() => console.log("Orientation reset to PORTRAIT on unmount"))
+        .catch(console.warn);
     };
   }, []);
 
@@ -71,21 +97,16 @@ const Movie = () => {
   `;
 
   const onShouldStartLoadWithRequest = (request) => {
-    if (!blockingEnabled) return true;
-
     try {
       const urlObj = new URL(request.url);
 
-      // Only allow http or https
       if (!["http:", "https:"].includes(urlObj.protocol)) {
         console.warn("Blocked non-http(s) URL:", request.url);
         forceRedirect();
         return false;
       }
 
-      // Only allow exact hostname
       const allowedHosts = ["streamingnow.mov", "multiembed.mov", "vidsrc.cc"];
-
       const isAllowed = allowedHosts.some(
         (host) =>
           urlObj.hostname === host || urlObj.hostname.endsWith(`.${host}`)
@@ -116,12 +137,7 @@ const Movie = () => {
 
   return (
     <View className="bg-black" style={{ flex: 1 }}>
-      <StatusBar
-        hidden={true}
-        // style="light"
-        // translucent={true}
-        // backgroundColor={"transparent"}
-      />
+      <StatusBar hidden={true} />
       <WebView
         ref={webViewRef}
         source={{ uri: videoUrl }}
@@ -134,6 +150,14 @@ const Movie = () => {
         originWhitelist={["*"]}
         setSupportMultipleWindows={false}
         style={{ flex: 1 }}
+        onFullscreenChange={(event) => {
+          if (event.nativeEvent.isFullscreen) {
+            ScreenOrientation.unlockAsync();
+            lock.current = true;
+          } else {
+            ScreenOrientation.unlockAsync();
+          }
+        }}
       />
     </View>
   );

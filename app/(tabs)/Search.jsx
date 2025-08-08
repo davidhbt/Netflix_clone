@@ -1,4 +1,11 @@
-import { View, Text, TextInput, FlatList, Image } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  Image,
+  ActivityIndicator,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,12 +29,15 @@ const Search = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
 
+  console.log(searchResult, isSearching);
+
   const headers = {
     accept: "application/json",
     Authorization: `Bearer ${Key}`,
   };
 
   const handleSearchChange = (text) => {
+    setIsSearching(true);
     setSearch(text);
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -37,6 +47,7 @@ const Search = () => {
       if (trimmed.length > 0) {
         fetchSearch(trimmed);
       } else {
+        setIsSearching(false);
         setSearchResult([]);
       }
     }, 1000);
@@ -87,6 +98,7 @@ const Search = () => {
       console.log(err);
     } finally {
       console.log("search dune");
+      setIsSearching(false);
     }
   };
 
@@ -169,27 +181,33 @@ const Search = () => {
           <Text className="text-white font-bold text-[18px] mb-[10px]">
             Top Searches
           </Text>
-          <View className="h-full w-full">
-            {search.trim().length > 0 ? (
-              <FlatList
-                data={searchResult}
-                showsVerticalScrollIndicator={false}
-                keyExtractor={(item) => item.id.toString()}
-                ItemSeparatorComponent={() => <View style={{ height: 15 }} />}
-                contentContainerStyle={{
-                  paddingBottom: 250,
-                }}
-                renderItem={({ item }) => <VerticalMovieCard item={item} />}
-              />
+          <View className="h-full w-full justify-start">
+            {isSearching ? (
+              <ActivityIndicator />
+            ) : search.trim().length > 0 && !isSearching ? (
+              searchResult.length === 0 ? (
+                <View className="flex-1 items-center  ">
+                  <Text className="text-white text-[16px] opacity-60">
+                    No results found for "{search}"
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={searchResult}
+                  showsVerticalScrollIndicator={false}
+                  keyExtractor={(item) => item.id.toString()}
+                  ItemSeparatorComponent={() => <View style={{ height: 15 }} />}
+                  contentContainerStyle={{ paddingBottom: 250 }}
+                  renderItem={({ item }) => <VerticalMovieCard item={item} />}
+                />
+              )
             ) : (
               <FlatList
                 data={TopSearch}
                 showsVerticalScrollIndicator={false}
                 keyExtractor={(item) => item.id.toString()}
                 ItemSeparatorComponent={() => <View style={{ height: 15 }} />}
-                contentContainerStyle={{
-                  paddingBottom: 250,
-                }}
+                contentContainerStyle={{ paddingBottom: 250 }}
                 renderItem={({ item }) => <VerticalMovieCard item={item} />}
               />
             )}

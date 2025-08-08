@@ -32,6 +32,38 @@ const TvDetails = () => {
   const [episodes, setEpisodes] = useState([]);
   const [isEpisodesLoading, setIsEpisodesLoading] = useState(false);
 
+  const CONTINUE_WATCHING_KEY = "continue_watching_list";
+
+  const addOrUpdateContinueWatching = async (item) => {
+    try {
+      const jsonValue = await AsyncStorage.getItem(CONTINUE_WATCHING_KEY);
+      let list = jsonValue != null ? JSON.parse(jsonValue) : [];
+
+      // Only match by show ID and media type (not episode)
+      const existingIndex = list.findIndex((entry) => {
+        return entry.id === item.id && entry.media_type === item.media_type;
+      });
+
+      if (existingIndex !== -1) {
+        // Update the existing entry to reflect the latest episode
+        list[existingIndex] = { ...item, lastWatchedAt: Date.now() };
+      } else {
+        // Add new entry
+        list.push({ ...item, lastWatchedAt: Date.now() });
+      }
+
+      // Sort by most recently watched
+      list.sort((a, b) => b.lastWatchedAt - a.lastWatchedAt);
+
+      // Keep only the most recent 3
+      list = list.slice(0, 10);
+
+      await AsyncStorage.setItem(CONTINUE_WATCHING_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error("Error updating continue watching list", e);
+    }
+  };
+
   console.log(TvDetails, selectedSeason);
   console.log(TvDetails);
 
@@ -181,7 +213,7 @@ const TvDetails = () => {
           <View className="flex-row gap-5">
             <TouchableOpacity
               // onPress={() => router.push(`/Movie/${TvDetails}`)}
-              onPress={() => {
+              onPress={async () => {
                 router.push({
                   pathname: `Movie/${TvDetails}`,
                   params: {
@@ -267,8 +299,20 @@ const TvDetails = () => {
                     //     },
                     //   })
                     // }
-                    onPress={() => {
+                    onPress={async () => {
                       console.log(ep.id, "asdawd");
+                      addOrUpdateContinueWatching({
+                        id: TvDetails,
+                        media_type: "tv",
+                        title: name,
+                        poster_path: image,
+                        bk_img: bk_img,
+                        date: date,
+                        rating: 0, // or your rating if you have it
+                        details: details,
+                        season: selectedSeason,
+                        episode: ep.episode_number,
+                      });
                       router.push({
                         pathname: `Movie/${TvDetails}`,
                         params: {

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { useEffect, useState, useRef, act } from "react";
+import { useEffect, useState, useRef, act, useCallback } from "react";
 import Carousel from "react-native-reanimated-carousel";
 import {
   Dimensions,
@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import MovieCard from "../../Components/ui/MovieCard";
 import { useContext } from "react";
 import { APIKEY } from "../_layout";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Animated, {
   Extrapolate,
   interpolate,
@@ -49,6 +49,9 @@ const Index = () => {
   const { Key } = useContext(APIKEY);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const [continueWatching, setContinueWatching] = useState([]);
+  const CONTINUE_WATCHING_KEY = "continue_watching_list";
+
   const [loadingStates, setLoadingStates] = useState({
     movies: true,
     tvShows: true,
@@ -56,6 +59,45 @@ const Index = () => {
     topRatedTvShow: true,
     // CarouselImage: false,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadContinueWatching = async () => {
+        try {
+          const jsonValue = await AsyncStorage.getItem(CONTINUE_WATCHING_KEY);
+          let list = jsonValue != null ? JSON.parse(jsonValue) : [];
+
+          // Remove duplicates by ID (optional improvement)
+          const seen = new Set();
+          list = list.filter((item) => {
+            const key =
+              item.media_type === "tv"
+                ? `${item.id}-${item.season}-${item.episode}`
+                : item.id;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          // Limit list to latest 3 (keep newest at end)
+          if (list.length > 10) {
+            list = list.slice(list.length - 10); // keep last 3
+            await AsyncStorage.setItem(
+              CONTINUE_WATCHING_KEY,
+              JSON.stringify(list)
+            );
+          }
+
+          setContinueWatching(list);
+          console.log("Continue Watching:", list);
+        } catch (e) {
+          console.error("Error loading continue watching list", e);
+        }
+      };
+
+      loadContinueWatching();
+    }, [])
+  );
 
   const [slideImageLoading, setSlideImageLoading] = useState(true);
 
@@ -350,6 +392,7 @@ const Index = () => {
 
             // className=""
           />
+
           <View className="flex items-center gap-3 flex-1 ">
             <Text
               key={activeIndex}
@@ -412,6 +455,104 @@ const Index = () => {
             </View>
           </View>
         </View>
+
+        {continueWatching.length === 0 ? null : (
+          <View className="px-[10px] py-[3px] mt-[20px]">
+            <Text className="text-white text-xl font-bold mb-3">
+              Continue Watching
+            </Text>
+            {continueWatching.length === 0 ? (
+              <Text className="text-neutral-400">
+                No shows or movies to continue
+              </Text>
+            ) : (
+              <FlatList
+                horizontal
+                data={continueWatching}
+                keyExtractor={(item) =>
+                  item.media_type === "tv"
+                    ? `${item.id}-${item.season}-${item.episode}`
+                    : `${item.id}`
+                }
+                showsHorizontalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (item.media_type === "tv") {
+                        router.push({
+                          pathname: `Movie/${item.id}`,
+                          params: {
+                            uri: `https://vidsrc.cc/v2/embed/tv/${item.id}/${item.season}/${item.episode}?autoPlay=true`,
+                          },
+                        });
+                      } else {
+                        router.push({
+                          pathname: `/MovieDetails/${item.id}`,
+                          params: {
+                            MovieDetails: item,
+                            image: item.poster_path,
+                            name: item.title,
+                            bk_img: item.bk_img,
+                            image: item.poster_path,
+                            name: item.title || "Untitled",
+                            date: item.date || "Unknown",
+                            rating: item.vote_average || 0,
+                            details: item.details || "No overview available.",
+                            mediaType: item.media_type,
+                            id: item.id,
+                          },
+                        });
+                      }
+                    }}
+                    className="mr-4"
+                  >
+                    <Image
+                      source={{
+                        uri: `https://image.tmdb.org/t/p/w300${item.poster_path}`,
+                      }}
+                      className="w-32 h-48 rounded-lg"
+                      resizeMode="cover"
+                    />
+                    <Text className="text-white w-32 mt-1" numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {item.media_type === "tv" && (
+                      <View className="flex-row items-center justify-between mt-1">
+                        <Text className="text-gray-300 text-xs">
+                          S{item.season} • E{item.episode}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() =>
+                            router.push({
+                              pathname: `/TvDetails/${item.id}`,
+                              params: {
+                                bk_img: item.bk_img,
+                                image: item.poster_path,
+                                name: item.title || "Untitled",
+                                date: item.date || "Unknown",
+                                rating: item.vote_average || 0,
+                                details:
+                                  item.details || "No overview available.",
+                                mediaType: item.media_type,
+                                id: item.id,
+                              },
+                            })
+                          }
+                        >
+                          <Ionicons
+                            name="information-circle-outline"
+                            size={18}
+                            color="white"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        )}
 
         {/* Top Movies List */}
         <CategoryList Title="Trending Movies" data={topMovies} />

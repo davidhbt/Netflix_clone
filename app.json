@@ -3,7 +3,7 @@
     "name": "netflixClone",
     "slug": "netflixClone",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "netflixclone",
     "userInterfaceStyle": "automatic",
@@ -16,7 +16,9 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [],
+      "package": "com.davidhbt.netflixClone"
     },
     "web": {
       "bundler": "metro",
@@ -33,10 +35,19 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "react-native-video"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0b0c7f85-6f8d-42ac-8565-4f3544c37e9c"
+      }
     }
   }
 }
